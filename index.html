@@ -1,319 +1,1083 @@
 <!DOCTYPE html>
-<html lang="pt-PT">
+<html lang="pt-PT" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Removedor de Fundo IA - MagicEraser V12 (Final)</title>
-    <!-- Tailwind CSS -->
+    <title>Removedor de Fundo Pro V34</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f0f2f5; }
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; user-select: none; }
+        
         .checkerboard {
-            background-image: linear-gradient(45deg, #cbd5e1 25%, transparent 25%), linear-gradient(-45deg, #cbd5e1 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #cbd5e1 75%), linear-gradient(-45deg, transparent 75%, #cbd5e1 75%);
+            background-color: #1e293b;
+            background-image: linear-gradient(45deg, #0f172a 25%, transparent 25%), linear-gradient(-45deg, #0f172a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #0f172a 75%), linear-gradient(-45deg, transparent 75%, #0f172a 75%);
             background-size: 20px 20px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         }
-        .loader {
-            border: 3px solid #e2e8f0; border-top: 3px solid #4f46e5; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite;
+        
+        #canvas-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .layer {
+            position: absolute;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        #bg-layer-img { z-index: 1; pointer-events: none; }
+        #editor { z-index: 2; pointer-events: auto; touch-action: none; }
+        #selection-layer { 
+            z-index: 3; 
+            pointer-events: none; 
+            mix-blend-mode: screen;
+            opacity: 0.7;
+        }
+        
+        .tool-btn.active { background-color: #6366f1; color: white; border-color: #6366f1; }
+        .tool-btn.active .icon-bg { background-color: rgba(255,255,255,0.2); color: white; }
+        
+        input[type=range] { 
+            accent-color: #6366f1; 
+            background: #334155; 
+            height: 6px; 
+            border-radius: 4px;
+        }
+        
+        input[type=checkbox] {
+            accent-color: #6366f1;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        
+        .fade-in-up { animation: fadeInUp 0.3s ease-out forwards; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
     </style>
 </head>
-<body class="min-h-screen flex flex-col items-center py-10 px-4">
+<body class="h-screen flex flex-col overflow-hidden text-slate-200">
 
-    <!-- Header -->
-    <header class="text-center mb-8 max-w-2xl">
-        <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-2">Magic<span class="text-indigo-600">Eraser</span> V12</h1>
-        <p class="text-slate-500">Sistema de Alta Disponibilidade (JSPM + ESM)</p>
+    <!-- Top Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 h-16 flex items-center justify-between px-4 md:px-6 shrink-0 z-20 shadow-lg">
+        <div class="flex items-center gap-3">
+            <div class="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-xl shadow-lg shadow-indigo-500/20">
+                <i data-lucide="layers" class="text-white w-5 h-5"></i>
+            </div>
+            <h1 class="font-bold text-slate-100 text-lg hidden md:block tracking-tight">Removedor de Fundo <span class="text-indigo-400">Pro</span></h1>
+        </div>
+        
+        <div class="flex gap-3 items-center">
+            <div class="flex items-center gap-1 bg-slate-800 rounded-lg p-1 mr-2 border border-slate-700">
+                <button onclick="changeBg('checkerboard')" id="bg-checker" class="p-1.5 rounded bg-slate-700 text-indigo-400 shadow-sm transition" title="Fundo Transparente"><i data-lucide="grid" class="w-4 h-4"></i></button>
+                <button onclick="changeBg('white')" id="bg-white" class="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition" title="Fundo Branco"><div class="w-4 h-4 bg-white border border-slate-500 rounded-sm"></div></button>
+                <button onclick="changeBg('black')" id="bg-black" class="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition" title="Fundo Preto"><div class="w-4 h-4 bg-black border border-slate-500 rounded-sm"></div></button>
+            </div>
+            
+            <div class="h-6 w-px bg-slate-700 mx-1 hidden sm:block"></div>
+
+            <!-- Invert Cutout Button (New) -->
+            <button onclick="invertCutout()" id="btn-invert" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 md:px-4 py-2 rounded-lg font-medium text-sm transition border border-slate-700" disabled title="Se a IA apagar o objeto em vez do fundo, clique aqui">
+                <i data-lucide="sun-moon" class="w-4 h-4"></i> <span class="hidden sm:inline">Inverter</span>
+            </button>
+
+            <button onclick="toggleCompare()" id="btn-compare" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 md:px-4 py-2 rounded-lg font-medium text-sm transition border border-slate-700" disabled>
+                <i data-lucide="eye" class="w-4 h-4"></i> <span class="hidden sm:inline">Comparar</span>
+            </button>
+
+            <button onclick="document.getElementById('file-input').click()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 md:px-4 py-2 rounded-lg font-medium text-sm transition border border-slate-700">
+                <i data-lucide="upload" class="w-4 h-4"></i> <span class="hidden sm:inline">Carregar</span>
+            </button>
+            
+            <button onclick="downloadImage()" id="btn-download" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-medium text-sm transition opacity-50 cursor-not-allowed shadow-lg shadow-indigo-900/50" disabled title="Salvar imagem">
+                <i data-lucide="download" class="w-4 h-4"></i> <span class="hidden sm:inline">Salvar</span>
+            </button>
+        </div>
     </header>
 
-    <!-- Network Status Panel -->
-    <div id="status-panel" class="w-full max-w-3xl mb-6 bg-white rounded-lg border border-slate-200 p-4 shadow-sm text-sm">
-        <h3 class="font-semibold text-slate-700 mb-3 flex items-center gap-2">
-            <i data-lucide="wifi" class="w-4 h-4"></i> Verificação de Rede
-        </h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <div id="check-js" class="p-2 bg-slate-50 rounded border border-slate-100 flex justify-between items-center">
-                <span>Motor JS</span>
-                <span class="text-slate-400 text-xs">A aguardar...</span>
+    <!-- Main Workspace -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Left Toolbar -->
+        <aside class="w-80 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 overflow-y-auto z-10 shadow-2xl hidden md:flex">
+            <div class="p-5 space-y-8">
+                
+                <!-- AI Studio -->
+                <div>
+                    <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 flex items-center gap-2 tracking-wider">
+                        <i data-lucide="sparkles" class="w-3 h-3 text-indigo-400"></i> Estúdio AI
+                    </h3>
+                    <div class="space-y-3">
+                        
+                        <!-- Auto Remover (Gemini Cloud) -->
+                        <div class="flex gap-2">
+                            <button onclick="autoGeminiRemove()" id="btn-ai-gemini" class="flex-1 bg-slate-800 hover:bg-slate-750 hover:border-indigo-500/50 border border-slate-700 text-slate-200 py-3 px-4 rounded-xl text-sm font-medium transition flex items-center gap-3 group text-left relative overflow-hidden" disabled>
+                                <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                                <div class="bg-slate-900 p-2 rounded-lg shadow-sm group-hover:scale-110 transition text-indigo-400 border border-slate-700 z-10">
+                                    <i data-lucide="wand-sparkles" class="w-4 h-4"></i>
+                                </div>
+                                <div class="z-10">
+                                    <div class="font-semibold">Remoção Automática</div>
+                                    <div class="text-[10px] text-slate-400">1 Clique (Máscara HD)</div>
+                                </div>
+                            </button>
+                            <!-- Botão de Edição Manual do Prompt -->
+                            <button onclick="openGeminiRemoveModal()" id="btn-ai-edit" class="px-3 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl transition disabled:opacity-50" disabled title="Personalizar o que remover">
+                                <i data-lucide="pencil" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <!-- BG Gen -->
+                        <button onclick="openBgModal()" id="btn-gen-bg" class="w-full bg-slate-800 hover:bg-slate-750 hover:border-purple-500/50 border border-slate-700 text-slate-200 py-3 px-4 rounded-xl text-sm font-medium transition flex items-center gap-3 group text-left relative overflow-hidden" disabled>
+                            <div class="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                            <div class="bg-slate-900 p-2 rounded-lg shadow-sm group-hover:scale-110 transition text-purple-400 border border-slate-700 z-10">
+                                <i data-lucide="image-plus" class="w-4 h-4"></i>
+                            </div>
+                            <div class="z-10">
+                                <div class="font-semibold">Gerar Fundo</div>
+                                <div class="text-[10px] text-slate-400">Imagen 3</div>
+                            </div>
+                        </button>
+
+                        <!-- Caption -->
+                        <button onclick="generateCaption()" id="btn-caption" class="w-full bg-slate-800 hover:bg-slate-750 hover:border-emerald-500/50 border border-slate-700 text-slate-200 py-3 px-4 rounded-xl text-sm font-medium transition flex items-center gap-3 group text-left relative overflow-hidden" disabled>
+                            <div class="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                            <div class="bg-slate-900 p-2 rounded-lg shadow-sm group-hover:scale-110 transition text-emerald-400 border border-slate-700 z-10">
+                                <i data-lucide="type" class="w-4 h-4"></i>
+                            </div>
+                            <div class="z-10">
+                                <div class="font-semibold">Gerar Legenda</div>
+                                <div class="text-[10px] text-slate-400">Análise de imagem</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="h-px bg-slate-800"></div>
+
+                <!-- Manual Tools -->
+                <div>
+                    <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 flex items-center gap-2 tracking-wider">
+                        <i data-lucide="mouse-pointer-2" class="w-3 h-3 text-slate-400"></i> Edição Manual
+                    </h3>
+                    <div class="space-y-4">
+                        <!-- Magic Wand -->
+                        <button onclick="setTool('magic')" id="tool-magic" class="tool-btn w-full flex items-center gap-3 p-3 rounded-xl border border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800 transition text-left group active">
+                            <div class="icon-bg bg-orange-500/20 text-orange-400 p-2 rounded-lg group-hover:scale-110 transition border border-orange-500/30">
+                                <i data-lucide="wand-2" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-sm">Varinha Mágica</div>
+                                <div class="text-[10px] opacity-60">Seleção por cor</div>
+                            </div>
+                        </button>
+                        
+                        <!-- Magic Wand Settings -->
+                        <div id="magic-settings" class="bg-slate-800/50 p-4 rounded-xl border border-slate-800 space-y-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Modo de Seleção</label>
+                                <div class="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+                                    <button onclick="setMagicMode('contiguous')" id="mode-contiguous" class="flex-1 py-1.5 px-2 text-xs font-medium rounded text-indigo-400 bg-slate-800 border border-slate-700 transition shadow-sm">Contíguo</button>
+                                    <button onclick="setMagicMode('global')" id="mode-global" class="flex-1 py-1.5 px-2 text-xs font-medium rounded text-slate-500 hover:text-slate-300 transition">Global</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Checkbox Detecção de Borda -->
+                            <div class="flex items-center gap-3 p-1">
+                                <input type="checkbox" id="wand-edge-detect" class="bg-slate-900 border-slate-600 rounded text-indigo-500 focus:ring-offset-slate-800 focus:ring-indigo-500">
+                                <label for="wand-edge-detect" class="text-xs text-slate-300 font-medium cursor-pointer">Detecção de Borda</label>
+                            </div>
+
+                            <div>
+                                <div class="flex justify-between text-xs text-slate-400 mb-2"><span class="font-medium">Tolerância</span><span id="tol-display" class="font-mono bg-slate-900 px-1.5 py-0.5 rounded text-slate-300 border border-slate-700 text-[10px]">20%</span></div>
+                                <input type="range" id="tolerance" min="1" max="100" value="20" class="w-full">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs text-slate-400 mb-2"><span class="font-medium">Suavização</span><span id="feather-display" class="font-mono bg-slate-900 px-1.5 py-0.5 rounded text-slate-300 border border-slate-700 text-[10px]">1px</span></div>
+                                <input type="range" id="feather" min="0" max="10" value="1" class="w-full">
+                            </div>
+                        </div>
+
+                        <!-- Eraser -->
+                        <button onclick="setTool('eraser')" id="tool-eraser" class="tool-btn w-full flex items-center gap-3 p-3 rounded-xl border border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800 transition text-left group">
+                            <div class="icon-bg bg-pink-500/20 text-pink-400 p-2 rounded-lg group-hover:scale-110 transition border border-pink-500/30">
+                                <i data-lucide="eraser" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-sm">Borracha</div>
+                                <div class="text-[10px] opacity-60">Apagar livremente</div>
+                            </div>
+                        </button>
+                        <div id="eraser-settings" class="bg-slate-800/50 p-4 rounded-xl border border-slate-800 hidden">
+                            <div class="flex justify-between text-xs text-slate-400 mb-2"><span class="font-medium">Tamanho</span><span id="size-display" class="font-mono bg-slate-900 px-1.5 py-0.5 rounded text-slate-300 border border-slate-700 text-[10px]">30px</span></div>
+                            <input type="range" id="brush-size" min="5" max="150" value="30" class="w-full">
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="check-assets" class="p-2 bg-slate-50 rounded border border-slate-100 flex justify-between items-center">
-                <span>Modelos IA (Assets)</span>
-                <span class="text-slate-400 text-xs">A aguardar...</span>
+            
+            <div class="mt-auto p-4 border-t border-slate-800 bg-slate-900">
+                <button onclick="undo()" id="btn-undo" class="w-full py-2.5 border border-slate-700 bg-slate-800 rounded-lg text-slate-400 text-sm font-medium hover:bg-slate-750 hover:border-slate-600 flex items-center justify-center gap-2 mb-3 disabled:opacity-50 transition shadow-sm" disabled>
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Desfazer
+                </button>
+                <button onclick="restoreOriginal()" class="w-full py-2 text-red-400 text-xs font-medium hover:bg-red-500/10 rounded transition flex items-center justify-center gap-1 opacity-70 hover:opacity-100">
+                    <i data-lucide="refresh-ccw" class="w-3 h-3"></i> Restaurar Original
+                </button>
             </div>
-        </div>
-        <div id="error-box" class="hidden mt-3 p-3 bg-red-50 text-red-700 text-xs rounded border border-red-100 font-mono"></div>
+        </aside>
+
+        <!-- Canvas Area -->
+        <main class="flex-1 bg-slate-950 relative overflow-hidden flex items-center justify-center p-6">
+            <!-- Welcome State -->
+            <div id="welcome-state" class="text-center p-10 bg-slate-900/50 rounded-3xl shadow-2xl max-w-md border border-slate-800 backdrop-blur-sm">
+                <div class="w-24 h-24 bg-slate-800 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner ring-4 ring-slate-800/50">
+                    <i data-lucide="image-plus" class="w-12 h-12"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-3">Removedor de Fundo Pro</h2>
+                <p class="text-slate-400 text-sm mb-8 leading-relaxed">Arraste uma imagem para começar. Use a IA para remover fundos complexos ou gerar cenários.</p>
+                <button onclick="document.getElementById('file-input').click()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3.5 rounded-xl font-semibold shadow-lg shadow-indigo-900/50 transition transform hover:-translate-y-0.5 w-full">
+                    Carregar Imagem
+                </button>
+            </div>
+
+            <!-- Canvas Wrapper -->
+            <div id="canvas-wrapper" class="hidden checkerboard transition-all duration-300 rounded-lg shadow-2xl relative border border-slate-700/50">
+                <img id="bg-layer-img" class="layer hidden" alt="Background Generated">
+                <canvas id="editor" class="layer block cursor-crosshair"></canvas>
+                <canvas id="selection-layer" class="layer block"></canvas>
+            </div>
+
+            <!-- Floating Selection Action Bar -->
+            <div id="selection-bar" class="hidden fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-3 py-2.5 rounded-2xl shadow-2xl z-50 flex items-center gap-3 fade-in-up border border-slate-700 ring-1 ring-white/10">
+                <button onclick="applySelectionRemoval()" class="bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition shadow-lg shadow-red-900/20">
+                    <i data-lucide="scissors" class="w-4 h-4"></i> Apagar
+                </button>
+                <div class="w-px h-6 bg-slate-700"></div>
+                <button onclick="invertSelection()" class="hover:bg-slate-800 text-slate-300 p-2 rounded-xl transition" title="Inverter Seleção">
+                    <i data-lucide="arrow-left-right" class="w-5 h-5"></i>
+                </button>
+                <button onclick="clearSelection()" class="hover:bg-slate-800 text-slate-300 px-3 py-2 rounded-xl text-sm font-medium transition">
+                    Cancelar
+                </button>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loading" class="hidden absolute top-10 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur text-white px-6 py-3 rounded-full text-sm font-medium shadow-2xl flex items-center gap-3 z-50 ring-1 ring-white/10">
+                <div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                <span id="loading-text" class="tracking-wide">A processar...</span>
+            </div>
+        </main>
     </div>
 
-    <!-- Main App -->
-    <main class="w-full max-w-4xl bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100">
-        
-        <!-- Input View -->
-        <div id="input-view" class="p-10 text-center transition-opacity duration-300">
-            <div id="drop-zone" class="border-4 border-dashed border-slate-200 rounded-2xl p-12 transition-all cursor-pointer hover:border-indigo-400 hover:bg-slate-50 group relative">
-                <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" accept="image/*" disabled>
-                
-                <div class="pointer-events-none opacity-50 transition-opacity" id="drop-content">
-                    <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i data-lucide="image-plus" class="w-8 h-8"></i>
-                    </div>
-                    <h3 class="text-xl font-semibold text-slate-700">A inicializar...</h3>
-                    <p class="text-sm text-slate-400 mt-1">Aguarde a ligação aos servidores</p>
-                </div>
+    <!-- Gemini Remove Modal (Personalizar) -->
+    <div id="modal-gemini-remove" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-bold text-white flex items-center gap-3">
+                    <div class="bg-indigo-500/20 p-2 rounded-lg text-indigo-400 border border-indigo-500/30"><i data-lucide="sliders-horizontal" class="w-5 h-5"></i></div>
+                    Personalizar Remoção
+                </h3>
+                <button onclick="closeModal('modal-gemini-remove')" class="text-slate-500 hover:text-white transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <p class="text-sm text-slate-400 mb-4">Escolha uma ação rápida ou descreva manualmente.</p>
+            
+            <div class="grid grid-cols-2 gap-3 mb-4 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                <button onclick="setGeminiAction('keep')" id="gm-keep" class="py-2 text-xs font-bold rounded-lg bg-slate-800 text-white shadow transition border border-slate-700">MANTER</button>
+                <button onclick="setGeminiAction('remove')" id="gm-remove" class="py-2 text-xs font-bold rounded-lg text-slate-500 hover:text-white transition">REMOVER</button>
+            </div>
+
+            <!-- Sugestões Rápidas -->
+            <div class="flex flex-wrap gap-2 mb-3">
+                <button onclick="fillPrompt('O sujeito principal')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] text-slate-300 border border-slate-700 transition">O Principal</button>
+                <button onclick="fillPrompt('As pessoas')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] text-slate-300 border border-slate-700 transition">Pessoas</button>
+                <button onclick="fillPrompt('O produto')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] text-slate-300 border border-slate-700 transition">Produto</button>
+                <button onclick="fillPrompt('O céu')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] text-slate-300 border border-slate-700 transition">Céu</button>
+                <button onclick="fillPrompt('O fundo')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] text-slate-300 border border-slate-700 transition">Fundo</button>
+            </div>
+
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Descrição</label>
+            <textarea id="gemini-prompt" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none mb-3 placeholder-slate-600" placeholder="Ex: A pessoa de chapéu..."></textarea>
+            
+            <div class="flex gap-3">
+                <button onclick="closeModal('modal-gemini-remove')" class="flex-1 py-3 text-slate-400 font-medium hover:bg-slate-800 rounded-xl transition">Cancelar</button>
+                <button onclick="confirmGeminiRemove()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-900/30 transition flex items-center justify-center gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i> Processar
+                </button>
             </div>
         </div>
+    </div>
 
-        <!-- Processing View -->
-        <div id="processing-view" class="hidden p-16 text-center">
-            <div class="loader mx-auto mb-4"></div>
-            <h3 class="text-lg font-semibold text-slate-800">A processar imagem...</h3>
-            <p id="progress-text" class="text-sm text-slate-500 mt-2">A preparar...</p>
-        </div>
-
-        <!-- Result View -->
-        <div id="result-view" class="hidden grid md:grid-cols-2 min-h-[400px]">
-            <div class="p-6 bg-slate-50 flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-200">
-                <img id="img-original" class="max-w-full max-h-[400px] object-contain rounded shadow-sm">
+    <!-- Background Gen Modal -->
+    <div id="modal-bg-gen" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-bold text-white flex items-center gap-3"><div class="bg-purple-500/20 p-2 rounded-lg text-purple-400 border border-purple-500/30"><i data-lucide="image-plus" class="w-5 h-5"></i></div>Gerar Fundo</h3>
+                <button onclick="closeModal('modal-bg-gen')" class="text-slate-500 hover:text-white transition"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <div class="p-6 bg-white flex flex-col items-center justify-center relative">
-                <div class="checkerboard w-full h-full flex items-center justify-center rounded overflow-hidden border border-slate-200">
-                    <img id="img-processed" class="max-w-full max-h-[400px] object-contain">
-                </div>
+            <p class="text-sm text-slate-400 mb-2">Descreva o cenário que deseja criar.</p>
+            <textarea id="bg-prompt" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-purple-500 outline-none resize-none mb-6 placeholder-slate-600" placeholder="Ex: Uma praia tropical paradisíaca ao pôr do sol..."></textarea>
+            <div class="flex gap-3">
+                <button onclick="closeModal('modal-bg-gen')" class="flex-1 py-3 text-slate-400 font-medium hover:bg-slate-800 rounded-xl transition">Cancelar</button>
+                <button onclick="confirmBgGen()" class="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-xl shadow-lg shadow-purple-900/30 transition flex items-center justify-center gap-2"><i data-lucide="sparkles" class="w-4 h-4"></i> Gerar</button>
             </div>
         </div>
+    </div>
 
-        <!-- Toolbar -->
-        <div id="toolbar" class="hidden p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-            <button onclick="resetApp()" class="text-slate-600 hover:text-slate-900 text-sm font-medium px-4 py-2 rounded hover:bg-slate-200 transition">
-                Nova Imagem
-            </button>
-            <button onclick="downloadImage()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg shadow font-medium transition flex items-center gap-2">
-                <i data-lucide="download" class="w-4 h-4"></i> Download
-            </button>
+    <!-- Caption Modal -->
+    <div id="modal-caption" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-bold text-white flex items-center gap-3"><div class="bg-emerald-500/20 p-2 rounded-lg text-emerald-400 border border-emerald-500/30"><i data-lucide="text-cursor" class="w-5 h-5"></i></div>Legenda Gerada</h3>
+                <button onclick="closeModal('modal-caption')" class="text-slate-500 hover:text-white transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="caption-result" class="bg-slate-950 rounded-xl p-4 text-slate-300 text-sm leading-relaxed border border-slate-800 max-h-60 overflow-y-auto prose prose-sm prose-invert"></div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeModal('modal-caption')" class="flex-1 py-3 text-slate-400 font-medium hover:bg-slate-800 rounded-xl transition">Fechar</button>
+                <button onclick="copyCaption()" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-xl shadow-lg shadow-emerald-900/30 transition flex items-center justify-center gap-2"><i data-lucide="copy" class="w-4 h-4"></i> Copiar</button>
+            </div>
         </div>
-    </main>
+    </div>
+
+    <!-- Mobile Toolbar -->
+    <div class="md:hidden bg-slate-900 border-t border-slate-800 p-3 flex justify-around items-center shrink-0 z-20 pb-safe">
+         <button onclick="setTool('magic')" id="mob-magic" class="p-2.5 text-indigo-400 bg-indigo-500/10 rounded-xl border border-indigo-500/20"><i data-lucide="wand-2" class="w-6 h-6"></i></button>
+         <button onclick="setTool('eraser')" id="mob-eraser" class="p-2.5 text-slate-500"><i data-lucide="eraser" class="w-6 h-6"></i></button>
+         <button onclick="openBgModal()" class="p-2.5 text-purple-500"><i data-lucide="image-plus" class="w-6 h-6"></i></button>
+         <button onclick="autoGeminiRemove()" class="p-2.5 text-blue-500"><i data-lucide="wand-sparkles" class="w-6 h-6"></i></button>
+         <button onclick="undo()" class="p-2.5 text-slate-500"><i data-lucide="rotate-ccw" class="w-6 h-6"></i></button>
+    </div>
+
+    <input type="file" id="file-input" class="hidden" accept="image/*">
 
     <script type="module">
         lucide.createIcons();
+        const apiKey = ""; 
 
-        // --- Configuração de Fontes (Sources) ---
-        // JS: URLs para carregar o código principal
-        // ASSETS: URLs (pastas) onde estão os ficheiros .wasm
+        // --- Variáveis Globais ---
+        const canvas = document.getElementById('editor');
+        const selectionCanvas = document.getElementById('selection-layer');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const selCtx = selectionCanvas.getContext('2d');
+        const bgImg = document.getElementById('bg-layer-img');
         
-        const SOURCES = {
-            js: [
-                { name: 'ESM.sh', url: 'https://esm.sh/@imgly/background-removal@1.3.0', type: 'module' },
-                { name: 'JSPM', url: 'https://ga.jspm.io/npm:@imgly/background-removal@1.3.0/dist/imgly-background-removal.min.js', type: 'script' },
-                { name: 'jsDelivr', url: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/dist/imgly-background-removal.min.js', type: 'script' }
-            ],
-            assets: [
-                { name: 'JSPM', url: 'https://ga.jspm.io/npm:@imgly/background-removal@1.3.0/dist/' },
-                { name: 'Unpkg', url: 'https://unpkg.com/@imgly/background-removal@1.3.0/dist/' },
-                { name: 'jsDelivr', url: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/dist/' }
-            ]
+        let currentTool = 'magic'; 
+        let magicMode = 'contiguous'; 
+        let isDrawing = false;
+        let originalImg = null;
+        let history = [];
+        let historyStep = -1;
+        const MAX_HISTORY = 10;
+        let isComparing = false;
+        let tempCanvasState = null;
+        let currentBgUrl = null;
+        let geminiActionType = 'keep'; 
+        
+        let currentSelectionMask = null;
+        let lastClickPos = null;
+
+        // --- Init & Upload ---
+        const fileInput = document.getElementById('file-input');
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) loadImage(e.target.files[0]);
+        });
+
+        function loadImage(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    originalImg = img;
+                    initCanvas(img);
+                    document.getElementById('welcome-state').classList.add('hidden');
+                    document.getElementById('canvas-wrapper').classList.remove('hidden');
+                    document.getElementById('canvas-wrapper').classList.add('flex');
+                    
+                    const enableIds = ['btn-download', 'btn-compare', 'btn-ai-gemini', 'btn-ai-edit', 'btn-gen-bg', 'btn-caption', 'btn-ai-custom', 'btn-invert'];
+                    enableIds.forEach(id => {
+                        const el = document.getElementById(id);
+                        if(el) { el.disabled = false; el.classList.remove('opacity-50', 'cursor-not-allowed'); }
+                    });
+                    
+                    history = [];
+                    historyStep = -1;
+                    clearBackground();
+                    clearSelection();
+                    saveState();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function initCanvas(img) {
+            const MAX_SIZE = 2500; 
+            let w = img.width;
+            let h = img.height;
+            if (w > MAX_SIZE || h > MAX_SIZE) {
+                const ratio = Math.min(MAX_SIZE / w, MAX_SIZE / h);
+                w = Math.floor(w * ratio);
+                h = Math.floor(h * ratio);
+            }
+            canvas.width = w;
+            canvas.height = h;
+            selectionCanvas.width = w;
+            selectionCanvas.height = h;
+            
+            ctx.drawImage(img, 0, 0, w, h);
+            bgImg.style.width = 'auto';
+            bgImg.style.height = 'auto';
+        }
+
+        // --- MÁGICA: Seleção Visual ---
+        function calculateSelection(startX, startY) {
+            const tolerance = parseInt(document.getElementById('tolerance').value);
+            const useEdge = document.getElementById('wand-edge-detect').checked;
+            const width = canvas.width;
+            const height = canvas.height;
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const data = imgData.data;
+            const mask = new Uint8Array(width * height);
+
+            const targetIdx = (startY * width + startX) * 4;
+            const r0 = data[targetIdx], g0 = data[targetIdx+1], b0 = data[targetIdx+2], a0 = data[targetIdx+3];
+
+            if (a0 === 0) return null;
+
+            const maxDiff = (tolerance / 100) * (255 * 3);
+            const edgeThreshold = 30;
+
+            if (magicMode === 'global') {
+                for (let i = 0; i < width * height; i++) {
+                    const idx = i * 4;
+                    if (data[idx+3] === 0) continue;
+                    const diff = Math.abs(data[idx] - r0) + Math.abs(data[idx+1] - g0) + Math.abs(data[idx+2] - b0);
+                    if (diff <= maxDiff) mask[i] = 1;
+                }
+            } else {
+                const stack = [[startX, startY]];
+                const visited = new Uint8Array(width * height);
+                while (stack.length > 0) {
+                    const [x, y] = stack.pop();
+                    const i = y * width + x;
+                    if (visited[i]) continue;
+                    visited[i] = 1;
+                    const pxIdx = i * 4;
+                    if (data[pxIdx+3] === 0) continue;
+                    const diff = Math.abs(data[pxIdx] - r0) + Math.abs(data[pxIdx+1] - g0) + Math.abs(data[pxIdx+2] - b0);
+                    if (diff <= maxDiff) {
+                        mask[i] = 1;
+                        const neighbors = [{nx: x+1, ny: y}, {nx: x-1, ny: y}, {nx: x, ny: y+1}, {nx: x, ny: y-1}];
+                        for(let n of neighbors) {
+                            if(n.nx >= 0 && n.nx < width && n.ny >= 0 && n.ny < height) {
+                                if (useEdge) {
+                                    const nIdx = (n.ny * width + n.nx) * 4;
+                                    const edgeDiff = Math.abs(data[pxIdx] - data[nIdx]) + Math.abs(data[pxIdx+1] - data[nIdx+1]) + Math.abs(data[pxIdx+2] - data[nIdx+2]);
+                                    if (edgeDiff > edgeThreshold * 3) continue;
+                                }
+                                stack.push([n.nx, n.ny]);
+                            }
+                        }
+                    }
+                }
+            }
+            return mask;
+        }
+
+        function drawSelectionOverlay(mask) {
+            const w = selectionCanvas.width;
+            const h = selectionCanvas.height;
+            selCtx.clearRect(0, 0, w, h);
+            if (!mask) return;
+            const overlayData = selCtx.createImageData(w, h);
+            const d = overlayData.data;
+            for (let i = 0; i < mask.length; i++) {
+                if (mask[i] === 1) {
+                    const idx = i * 4;
+                    d[idx] = 0; d[idx+1] = 255; d[idx+2] = 255; d[idx+3] = 100;
+                }
+            }
+            selCtx.putImageData(overlayData, 0, 0);
+            document.getElementById('selection-bar').classList.remove('hidden');
+            document.getElementById('selection-bar').classList.add('flex');
+        }
+
+        // --- Ações de Seleção ---
+        window.applySelectionRemoval = () => {
+            if (!currentSelectionMask) return;
+            showLoader(true, "A apagar...");
+            setTimeout(() => {
+                const w = canvas.width;
+                const h = canvas.height;
+                const imgData = ctx.getImageData(0, 0, w, h);
+                const data = imgData.data;
+                const mask = currentSelectionMask;
+                const featherSize = parseInt(document.getElementById('feather').value);
+
+                const expandedMask = new Uint8Array(mask.length);
+                for(let y=1; y<h-1; y++) {
+                    for(let x=1; x<w-1; x++) {
+                        const i = y*w+x;
+                        if(mask[i]) {
+                            expandedMask[i] = 1; expandedMask[i-1] = 1; expandedMask[i+1] = 1; expandedMask[i-w] = 1; expandedMask[i+w] = 1;
+                        }
+                    }
+                }
+
+                let finalAlpha = new Float32Array(mask.length);
+                for(let i=0; i<expandedMask.length; i++) finalAlpha[i] = expandedMask[i];
+
+                if(featherSize > 0) {
+                    const passes = Math.ceil(featherSize / 2);
+                    for(let p=0; p<passes; p++) {
+                        const blurred = new Float32Array(mask.length);
+                        for(let y=1; y<h-1; y++) {
+                            for(let x=1; x<w-1; x++) {
+                                const i = y*w+x;
+                                const sum = finalAlpha[i] + finalAlpha[i-1] + finalAlpha[i+1] + finalAlpha[i-w] + finalAlpha[i+w];
+                                blurred[i] = sum / 5.0; 
+                            }
+                        }
+                        finalAlpha = blurred;
+                    }
+                }
+
+                for (let i = 0; i < mask.length; i++) {
+                    const featherVal = finalAlpha[i]; 
+                    if (featherVal > 0.01) { 
+                        const alphaIdx = i*4 + 3;
+                        const currentAlpha = data[alphaIdx];
+                        data[alphaIdx] = currentAlpha * (1 - featherVal);
+                    }
+                }
+
+                ctx.putImageData(imgData, 0, 0);
+                clearSelection();
+                saveState();
+                showLoader(false);
+            }, 10);
         };
 
-        // Estado Global
-        let loadedLib = null;
-        let validAssetPath = null;
-        let currentBlob = null;
+        window.invertSelection = () => {
+            if (!currentSelectionMask) return;
+            for(let i=0; i<currentSelectionMask.length; i++) currentSelectionMask[i] = currentSelectionMask[i] === 1 ? 0 : 1;
+            drawSelectionOverlay(currentSelectionMask);
+        };
 
-        // --- Funções de Diagnóstico e Carregamento ---
+        window.clearSelection = () => {
+            currentSelectionMask = null; lastClickPos = null;
+            selCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+            document.getElementById('selection-bar').classList.add('hidden');
+            document.getElementById('selection-bar').classList.remove('flex');
+        };
 
-        // 1. Encontrar uma fonte de JS funcional
-        async function findWorkingJS() {
-            const statusEl = document.getElementById('check-js');
+        // --- Interaction ---
+        document.getElementById('tolerance').addEventListener('input', (e) => {
+            document.getElementById('tol-display').innerText = e.target.value + '%';
+            if (currentTool === 'magic' && lastClickPos) {
+                const mask = calculateSelection(lastClickPos.x, lastClickPos.y);
+                currentSelectionMask = mask;
+                drawSelectionOverlay(mask);
+            }
+        });
+        document.getElementById('feather').addEventListener('input', (e) => document.getElementById('feather-display').innerText = e.target.value + 'px');
+        document.getElementById('wand-edge-detect').addEventListener('change', () => {
+            if (currentTool === 'magic' && lastClickPos) {
+                const mask = calculateSelection(lastClickPos.x, lastClickPos.y);
+                currentSelectionMask = mask;
+                drawSelectionOverlay(mask);
+            }
+        });
+
+        canvas.addEventListener('mousedown', startAction);
+        canvas.addEventListener('touchstart', startAction, {passive: false});
+        canvas.addEventListener('mousemove', moveAction);
+        canvas.addEventListener('touchmove', moveAction, {passive: false});
+        canvas.addEventListener('mouseup', endAction);
+        canvas.addEventListener('touchend', endAction);
+
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+        }
+
+        function startAction(e) {
+            if(isComparing) return;
+            if (e.cancelable) e.preventDefault();
+            const pos = getPos(e);
             
-            for (const src of SOURCES.js) {
-                try {
-                    statusEl.innerHTML = `<span>Motor JS</span> <span class="text-blue-500 text-xs">A testar ${src.name}...</span>`;
-                    
-                    if (src.type === 'module') {
-                        // Tenta importar como módulo (Moderno)
-                        const module = await import(src.url);
-                        loadedLib = module.default || module;
-                    } else {
-                        // Tenta carregar como script clássico
-                        await loadScript(src.url);
-                        if (window.imglyBackgroundRemoval) loadedLib = window.imglyBackgroundRemoval;
-                    }
+            if (currentTool === 'magic') {
+                const x = Math.floor(pos.x);
+                const y = Math.floor(pos.y);
+                if (x>=0 && y>=0 && x<canvas.width && y<canvas.height) {
+                    lastClickPos = {x, y};
+                    const mask = calculateSelection(x, y);
+                    currentSelectionMask = mask;
+                    drawSelectionOverlay(mask);
+                }
+                isDrawing = false;
+            } else if (currentTool === 'eraser') {
+                if (currentSelectionMask) clearSelection();
+                isDrawing = true;
+                ctx.beginPath();
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.lineWidth = document.getElementById('brush-size').value;
+                ctx.moveTo(pos.x, pos.y);
+                ctx.lineTo(pos.x, pos.y);
+                ctx.stroke();
+            }
+        }
 
-                    if (loadedLib) {
-                        statusEl.innerHTML = `<span>Motor JS</span> <span class="text-green-600 font-bold text-xs">✓ ${src.name} OK</span>`;
-                        return true;
-                    }
-                } catch (e) {
-                    console.warn(`JS ${src.name} falhou:`, e);
+        function moveAction(e) {
+            if (!isDrawing) return;
+            if (e.cancelable) e.preventDefault();
+            const pos = getPos(e);
+            if (currentTool === 'eraser') { ctx.lineTo(pos.x, pos.y); ctx.stroke(); }
+        }
+
+        function endAction(e) {
+            if (isDrawing && currentTool === 'eraser') {
+                isDrawing = false; ctx.closePath(); ctx.globalCompositeOperation = 'source-over'; saveState();
+            }
+        }
+
+        // --- INVERT CUTOUT (FIX FOR AI MISTAKES) ---
+        window.invertCutout = () => {
+            const w = canvas.width;
+            const h = canvas.height;
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const d = imgData.data;
+            
+            // To invert the "cutout" (transparency), we essentially want to swap opaque and transparent areas.
+            // But we need the original color data for the areas that are currently transparent.
+            // Since we overwrote them with 0 alpha in the canvas, we can't just invert alpha.
+            // We need to restore from original image where alpha is currently 0, 
+            // and set alpha to 0 where it is currently opaque.
+            
+            if (!originalImg) return;
+            
+            // Draw original image to a temp canvas to get pixel data
+            const tempC = document.createElement('canvas');
+            tempC.width = w; tempC.height = h;
+            const tCtx = tempC.getContext('2d');
+            tCtx.drawImage(originalImg, 0, 0, w, h);
+            const originalData = tCtx.getImageData(0, 0, w, h).data;
+            
+            for(let i=0; i<d.length; i+=4) {
+                const currentAlpha = d[i+3];
+                
+                if (currentAlpha < 50) {
+                    // Was removed -> Restore it (Make opaque)
+                    d[i] = originalData[i];
+                    d[i+1] = originalData[i+1];
+                    d[i+2] = originalData[i+2];
+                    d[i+3] = 255;
+                } else {
+                    // Was visible -> Remove it
+                    d[i+3] = 0;
                 }
             }
             
-            statusEl.innerHTML = `<span>Motor JS</span> <span class="text-red-600 font-bold text-xs">✗ Falha Total</span>`;
-            return false;
-        }
+            ctx.putImageData(imgData, 0, 0);
+            saveState();
+        };
 
-        function loadScript(url) {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = url;
-                script.crossOrigin = "anonymous";
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
-
-        // 2. Encontrar uma fonte de Assets (WASM) funcional
-        async function findWorkingAssets() {
-            const statusEl = document.getElementById('check-assets');
+        // --- AUTO GEMINI REMOVAL (1-CLICK MASKING) ---
+        window.autoGeminiRemove = async () => {
+            if(isComparing) window.toggleCompare();
+            if(currentSelectionMask) clearSelection(); 
             
-            for (const src of SOURCES.assets) {
-                try {
-                    statusEl.innerHTML = `<span>Modelos IA</span> <span class="text-blue-500 text-xs">A testar ${src.name}...</span>`;
-                    
-                    // Teste: Tenta descarregar um ficheiro pequeno da pasta dist para ver se está acessível
-                    // Usamos HEAD ou GET num ficheiro JS pequeno que sabemos que existe lá
-                    const testUrl = src.url + 'imgly-background-removal.min.js'; 
-                    const response = await fetch(testUrl, { method: 'HEAD', mode: 'cors' });
-                    
-                    if (response.ok || response.status === 200) {
-                        validAssetPath = src.url;
-                        statusEl.innerHTML = `<span>Modelos IA</span> <span class="text-green-600 font-bold text-xs">✓ ${src.name} OK</span>`;
-                        return true;
-                    }
-                } catch (e) {
-                    console.warn(`Assets ${src.name} falhou:`, e);
-                }
-            }
-            
-            statusEl.innerHTML = `<span>Modelos IA</span> <span class="text-red-600 font-bold text-xs">✗ Falha Total (Bloqueio)</span>`;
-            return false;
-        }
-
-        // 3. Inicialização
-        async function initSystem() {
-            const jsOk = await findWorkingJS();
-            
-            // Se falhou JS, nem tenta assets
-            if (!jsOk) {
-                showError("Não foi possível carregar o código da aplicação. Verifique a sua internet.");
-                return;
-            }
-
-            const assetsOk = await findWorkingAssets();
-            if (!assetsOk) {
-                showError("O código carregou, mas os ficheiros de IA (WASM) estão bloqueados. Tente desligar o AdBlock/VPN.");
-                return;
-            }
-
-            // Tudo pronto
-            enableUI();
-        }
-
-        function enableUI() {
-            const dz = document.getElementById('drop-zone');
-            const fi = document.getElementById('file-input');
-            const content = document.getElementById('drop-content');
-            
-            fi.disabled = false;
-            content.classList.remove('opacity-50');
-            content.innerHTML = `
-                <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i data-lucide="upload" class="w-8 h-8"></i>
-                </div>
-                <h3 class="text-xl font-semibold text-slate-700">Carregar Imagem</h3>
-                <p class="text-sm text-slate-400 mt-1">Arraste ou clique aqui</p>
-            `;
-            
-            // Events
-            dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('border-indigo-400', 'bg-indigo-50'); });
-            dz.addEventListener('dragleave', e => { e.preventDefault(); dz.classList.remove('border-indigo-400', 'bg-indigo-50'); });
-            dz.addEventListener('drop', e => { 
-                e.preventDefault(); 
-                dz.classList.remove('border-indigo-400', 'bg-indigo-50');
-                if(e.dataTransfer.files[0]) processImage(e.dataTransfer.files[0]);
-            });
-            fi.addEventListener('change', e => {
-                if(e.target.files[0]) processImage(e.target.files[0]);
-            });
-        }
-
-        // --- Lógica Principal ---
-
-        async function processImage(file) {
-            // UI
-            document.getElementById('input-view').classList.add('hidden');
-            document.getElementById('processing-view').classList.remove('hidden');
-            document.getElementById('result-view').classList.add('hidden');
-            document.getElementById('toolbar').classList.add('hidden');
-            
-            document.getElementById('img-original').src = URL.createObjectURL(file);
-            const progressEl = document.getElementById('progress-text');
-            progressEl.innerText = "A inicializar...";
+            showLoader(true, "Gemini a analisar...");
 
             try {
-                if (!loadedLib || !validAssetPath) throw new Error("Sistema não inicializado");
+                const tempC = document.createElement('canvas');
+                const maxDim = 1024;
+                let w = canvas.width, h = canvas.height;
+                if(w > maxDim || h > maxDim) {
+                    const ratio = Math.min(maxDim/w, maxDim/h);
+                    w = Math.floor(w*ratio); h = Math.floor(h*ratio);
+                }
+                tempC.width = w; tempC.height = h;
+                const tCtx = tempC.getContext('2d');
+                tCtx.drawImage(canvas, 0, 0, w, h);
+                const base64Image = tempC.toDataURL('image/jpeg', 0.85).split(',')[1];
 
-                const config = {
-                    publicPath: validAssetPath, // Usa o caminho que validamos antes
-                    debug: true,
-                    progress: (key, current, total) => {
-                         const percent = total ? Math.round((current / total) * 100) : 0;
-                         if(key.includes('fetch')) progressEl.innerText = `A descarregar IA: ${percent}%`;
-                         else if(key.includes('compute')) progressEl.innerText = `A remover fundo: ${percent}%`;
+                const finalPrompt = `Task: Generate a binary segmentation mask.
+Role: Professional Background Remover.
+Instruction:
+1. Identify the MAIN SUBJECT (Person, Product, or Animal) in the foreground.
+2. The SUBJECT must be WHITE (#FFFFFF).
+3. The BACKGROUND must be BLACK (#000000).
+4. Output strict black and white image.`;
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            role: "user",
+                            parts: [
+                                { text: finalPrompt },
+                                { inlineData: { mimeType: "image/jpeg", data: base64Image } }
+                            ]
+                        }],
+                        generationConfig: { responseModalities: ['IMAGE'] }
+                    })
+                });
+
+                if (!response.ok) throw new Error("Erro API");
+                const data = await response.json();
+                const resultB64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                if (!resultB64) throw new Error("Sem imagem.");
+
+                const maskImg = new Image();
+                maskImg.onload = () => {
+                    const maskCanvas = document.createElement('canvas');
+                    maskCanvas.width = canvas.width; maskCanvas.height = canvas.height;
+                    const mCtx = maskCanvas.getContext('2d');
+                    mCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
+                    
+                    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const d = frame.data;
+                    const maskData = mCtx.getImageData(0, 0, canvas.width, canvas.height).data;
+                    
+                    for(let i=0; i<d.length; i+=4) {
+                        const maskVal = maskData[i]; // 0=black(bg), 255=white(fg)
+                        const alphaFactor = maskVal / 255;
+                        const currentAlpha = d[i+3];
+                        d[i+3] = currentAlpha * alphaFactor;
                     }
+                    
+                    ctx.putImageData(frame, 0, 0);
+                    saveState();
+                    showLoader(false);
                 };
-
-                const blob = await loadedLib.removeBackground(file, config);
-                currentBlob = blob;
-                
-                const url = URL.createObjectURL(blob);
-                document.getElementById('img-processed').src = url;
-
-                document.getElementById('processing-view').classList.add('hidden');
-                document.getElementById('result-view').classList.remove('hidden');
-                document.getElementById('toolbar').classList.remove('hidden');
+                maskImg.src = `data:image/png;base64,${resultB64}`;
 
             } catch (error) {
-                console.error(error);
-                alert("Erro no processamento: " + error.message);
-                resetApp();
+                showLoader(false);
+                alert("Erro Gemini: " + error.message);
             }
+        };
+
+        // --- GEMINI CUSTOM REMOVAL (Modal) ---
+        window.openGeminiRemoveModal = () => {
+            document.getElementById('modal-gemini-remove').classList.remove('hidden');
+            document.getElementById('gemini-prompt').value = ""; 
+            document.getElementById('gemini-prompt').focus();
+        };
+
+        window.fillPrompt = (text) => {
+            document.getElementById('gemini-prompt').value = text;
         }
 
-        // --- Helpers Globais ---
+        window.setGeminiAction = (action) => {
+            geminiActionType = action;
+            const btnKeep = document.getElementById('gm-keep');
+            const btnRemove = document.getElementById('gm-remove');
+            if(action === 'keep') {
+                btnKeep.className = "py-2 text-xs font-bold rounded-lg bg-slate-800 text-white shadow transition border border-slate-700";
+                btnRemove.className = "py-2 text-xs font-bold rounded-lg text-slate-500 hover:text-white transition";
+            } else {
+                btnKeep.className = "py-2 text-xs font-bold rounded-lg text-slate-500 hover:text-white transition";
+                btnRemove.className = "py-2 text-xs font-bold rounded-lg bg-slate-800 text-white shadow transition border border-slate-700";
+            }
+        };
+
+        window.confirmGeminiRemove = async () => {
+            const userPrompt = document.getElementById('gemini-prompt').value.trim();
+            if(!userPrompt) return alert("Por favor, descreva o objeto.");
+            
+            closeModal('modal-gemini-remove');
+            if(isComparing) window.toggleCompare();
+            if(currentSelectionMask) clearSelection(); 
+            
+            showLoader(true, "Gemini a processar...");
+
+            try {
+                const tempC = document.createElement('canvas');
+                const maxDim = 1024;
+                let w = canvas.width, h = canvas.height;
+                if(w > maxDim || h > maxDim) {
+                    const ratio = Math.min(maxDim/w, maxDim/h);
+                    w = Math.floor(w*ratio); h = Math.floor(h*ratio);
+                }
+                tempC.width = w; tempC.height = h;
+                const tCtx = tempC.getContext('2d');
+                tCtx.drawImage(canvas, 0, 0, w, h);
+                const base64Image = tempC.toDataURL('image/jpeg', 0.85).split(',')[1];
+
+                let finalPrompt = "";
+                if (geminiActionType === 'keep') {
+                    finalPrompt = `Task: Create a binary segmentation mask. 
+Keep: '${userPrompt}' (White #FFFFFF). 
+Background: Everything else (Black #000000).`;
+                } else {
+                    finalPrompt = `Task: Create a binary segmentation mask. 
+Remove: '${userPrompt}' (Black #000000). 
+Keep: Everything else (White #FFFFFF).`;
+                }
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            role: "user",
+                            parts: [
+                                { text: finalPrompt },
+                                { inlineData: { mimeType: "image/jpeg", data: base64Image } }
+                            ]
+                        }],
+                        generationConfig: { responseModalities: ['IMAGE'] }
+                    })
+                });
+
+                if (!response.ok) throw new Error("Erro API");
+                const data = await response.json();
+                const resultB64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                if (!resultB64) throw new Error("Sem imagem.");
+
+                const maskImg = new Image();
+                maskImg.onload = () => {
+                    const maskCanvas = document.createElement('canvas');
+                    maskCanvas.width = canvas.width; maskCanvas.height = canvas.height;
+                    const mCtx = maskCanvas.getContext('2d');
+                    mCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
+                    
+                    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const d = frame.data;
+                    const maskData = mCtx.getImageData(0, 0, canvas.width, canvas.height).data;
+                    
+                    for(let i=0; i<d.length; i+=4) {
+                        const maskVal = maskData[i]; 
+                        const alpha = d[i+3];
+                        d[i+3] = alpha * (maskVal / 255);
+                    }
+                    ctx.putImageData(frame, 0, 0);
+                    saveState();
+                    showLoader(false);
+                };
+                maskImg.src = `data:image/png;base64,${resultB64}`;
+
+            } catch (error) {
+                showLoader(false);
+                alert("Erro Gemini: " + error.message);
+            }
+        };
+
+        // --- Other Features ---
         
-        window.resetApp = function() {
-            document.getElementById('input-view').classList.remove('hidden');
-            document.getElementById('processing-view').classList.add('hidden');
-            document.getElementById('result-view').classList.add('hidden');
-            document.getElementById('toolbar').classList.add('hidden');
-            document.getElementById('file-input').value = '';
+        window.openBgModal = () => { document.getElementById('modal-bg-gen').classList.remove('hidden'); document.getElementById('bg-prompt').focus(); };
+        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+        window.confirmBgGen = async () => {
+            const prompt = document.getElementById('bg-prompt').value;
+            if(!prompt) return;
+            closeModal('modal-bg-gen');
+            showLoader(true, "Gerando Fundo...");
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1 } })
+                });
+                const data = await response.json();
+                const b64 = data.predictions?.[0]?.bytesBase64Encoded;
+                if(b64) {
+                    currentBgUrl = `data:image/png;base64,${b64}`;
+                    bgImg.src = currentBgUrl;
+                    bgImg.classList.remove('hidden');
+                }
+                showLoader(false);
+            } catch(e) { showLoader(false); alert("Erro ao gerar fundo."); }
+        };
+
+        window.generateCaption = async () => {
+            showLoader(true, "Analisando...");
+            try {
+                const tempC = document.createElement('canvas');
+                tempC.width = canvas.width; tempC.height = canvas.height;
+                const tCtx = tempC.getContext('2d');
+                tCtx.fillStyle = '#0f172a'; tCtx.fillRect(0,0,canvas.width,canvas.height);
+                tCtx.drawImage(canvas, 0,0);
+                const b64 = tempC.toDataURL('image/jpeg', 0.8).split(',')[1];
+                
+                const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-002:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{text: "Crie uma legenda instagram pt-pt:"}, {inlineData: {mimeType: "image/jpeg", data: b64}}] }] })
+                });
+                const d = await resp.json();
+                document.getElementById('caption-result').innerHTML = marked.parse(d.candidates[0].content.parts[0].text);
+                document.getElementById('modal-caption').classList.remove('hidden');
+                showLoader(false);
+            } catch(e) { showLoader(false); alert("Erro na legenda."); }
+        };
+
+        window.setTool = (t) => {
+            if(currentSelectionMask && t !== 'magic') clearSelection();
+            currentTool = t;
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`tool-${t}`).classList.add('active');
+            
+            document.getElementById('magic-settings').classList.toggle('hidden', t !== 'magic');
+            document.getElementById('eraser-settings').classList.toggle('hidden', t !== 'eraser');
+            
+            if(t === 'magic') {
+                document.getElementById('mob-magic').className = "p-2.5 text-indigo-400 bg-indigo-500/10 rounded-xl border border-indigo-500/20";
+                document.getElementById('mob-eraser').className = "p-2.5 text-slate-500";
+            } else {
+                document.getElementById('mob-magic').className = "p-2.5 text-slate-500";
+                document.getElementById('mob-eraser').className = "p-2.5 text-indigo-400 bg-indigo-500/10 rounded-xl border border-indigo-500/20";
+            }
+            
+            canvas.style.cursor = t === 'magic' ? 'crosshair' : 'cell';
+        };
+
+        window.setMagicMode = (m) => {
+            magicMode = m;
+            document.getElementById('mode-contiguous').className = m === 'contiguous' ? "flex-1 py-1.5 px-2 text-xs font-medium rounded text-indigo-400 bg-slate-800 border border-slate-700 transition shadow-sm" : "flex-1 py-1.5 px-2 text-xs font-medium rounded text-slate-500 hover:text-slate-300 transition";
+            document.getElementById('mode-global').className = m === 'global' ? "flex-1 py-1.5 px-2 text-xs font-medium rounded text-indigo-400 bg-slate-800 border border-slate-700 transition" : "flex-1 py-1.5 px-2 text-xs font-medium rounded text-slate-500 hover:text-slate-300 transition";
+        };
+
+        document.getElementById('brush-size').addEventListener('input', (e) => document.getElementById('size-display').innerText = e.target.value + 'px');
+
+        function saveState() {
+            if (historyStep < history.length - 1) history = history.slice(0, historyStep + 1);
+            history.push(canvas.toDataURL());
+            if (history.length > MAX_HISTORY) history.shift(); else historyStep++;
+            document.getElementById('btn-undo').disabled = historyStep <= 0;
+            document.getElementById('btn-undo').classList.toggle('opacity-50', historyStep <= 0);
         }
 
-        window.downloadImage = function() {
-            if(!currentBlob) return;
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(currentBlob);
-            a.download = 'sem-fundo.png';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+        window.undo = function() {
+            if (historyStep > 0) {
+                historyStep--;
+                const img = new Image();
+                img.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0); };
+                img.src = history[historyStep];
+                document.getElementById('btn-undo').disabled = historyStep <= 0;
+                document.getElementById('btn-undo').classList.toggle('opacity-50', historyStep <= 0);
+            }
+        };
+
+        window.restoreOriginal = function() {
+            if (confirm("Tem a certeza?")) { if (originalImg) { initCanvas(originalImg); history = []; historyStep = -1; clearBackground(); clearSelection(); saveState(); } }
+        };
+
+        // --- Save via File System Access API ---
+        window.downloadImage = async () => {
+            try {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
+                const tCtx = tempCanvas.getContext('2d');
+                if (currentBgUrl) {
+                    const imgB = new Image();
+                    imgB.crossOrigin = "anonymous";
+                    await new Promise((r, j) => { 
+                        imgB.onload = r; 
+                        imgB.onerror = j;
+                        imgB.src = currentBgUrl; 
+                    });
+                    tCtx.drawImage(imgB, 0, 0, canvas.width, canvas.height);
+                }
+                tCtx.drawImage(canvas, 0, 0);
+
+                const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+
+                if ('showSaveFilePicker' in window) {
+                    try {
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: 'imagem-editada.png',
+                            types: [{
+                                description: 'PNG Image',
+                                accept: {'image/png': ['.png']},
+                            }],
+                        });
+                        const writable = await handle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                        return;
+                    } catch (err) {
+                        if (err.name === 'AbortError') return;
+                    }
+                }
+
+                const link = document.createElement('a');
+                link.download = 'imagem-editada.png';
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                URL.revokeObjectURL(link.href);
+
+            } catch(e) {
+                alert("Erro ao salvar imagem: " + e.message);
+                console.error(e);
+            }
+        };
+
+        function showLoader(show, text) {
+            const el = document.getElementById('loading');
+            if (show) { el.classList.remove('hidden'); el.classList.add('flex'); document.getElementById('loading-text').innerText = text; } 
+            else { el.classList.add('hidden'); el.classList.remove('flex'); }
         }
+        function clearBackground() { bgImg.src = ''; bgImg.classList.add('hidden'); currentBgUrl = null; }
+        window.copyCaption = () => { navigator.clipboard.writeText(document.getElementById('caption-result').innerText); alert("Copiado!"); };
+        
+        // Helper UI
+        window.changeBg = (type) => {
+             const wrapper = document.getElementById('canvas-wrapper');
+             const btns = ['bg-checker', 'bg-white', 'bg-black'];
+             wrapper.classList.remove('checkerboard', 'bg-white', 'bg-black');
+             btns.forEach(id => document.getElementById(id).className = "p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition");
+             const activeBtn = document.getElementById(type === 'checkerboard' ? 'bg-checker' : (type === 'white' ? 'bg-white' : 'bg-black'));
+             activeBtn.className = "p-1.5 rounded bg-slate-700 text-indigo-400 shadow-sm transition ring-1 ring-slate-600";
+             if (type === 'checkerboard') wrapper.classList.add('checkerboard');
+             else if (type === 'white') wrapper.classList.add('bg-white');
+             else if (type === 'black') wrapper.classList.add('bg-black');
+        };
 
-        function showError(msg) {
-            const box = document.getElementById('error-box');
-            box.classList.remove('hidden');
-            box.innerText = msg;
-        }
-
-        // Start
-        initSystem();
-
+        window.toggleCompare = () => {
+             if (!originalImg) return;
+             isComparing = !isComparing;
+             const btn = document.getElementById('btn-compare');
+             if (isComparing) {
+                 tempCanvasState = canvas.toDataURL();
+                 ctx.clearRect(0,0, canvas.width, canvas.height);
+                 if(currentBgUrl) bgImg.classList.add('hidden');
+                 ctx.drawImage(originalImg, 0, 0, canvas.width, canvas.height);
+                 btn.classList.add('bg-slate-700', 'text-white', 'border-slate-600');
+                 btn.innerHTML = `<i data-lucide="eye-off" class="w-4 h-4"></i> <span class="hidden sm:inline">Voltar</span>`;
+             } else {
+                 const img = new Image();
+                 img.onload = () => {
+                     ctx.clearRect(0,0, canvas.width, canvas.height);
+                     ctx.drawImage(img, 0, 0);
+                     if(currentBgUrl) bgImg.classList.remove('hidden');
+                 };
+                 img.src = tempCanvasState;
+                 btn.classList.remove('bg-slate-700', 'text-white', 'border-slate-600');
+                 btn.innerHTML = `<i data-lucide="eye" class="w-4 h-4"></i> <span class="hidden sm:inline">Comparar</span>`;
+             }
+             lucide.createIcons();
+        };
     </script>
 </body>
 </html>
