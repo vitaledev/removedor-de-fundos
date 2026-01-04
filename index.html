@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Removedor de Fundo IA - MagicEraser V4</title>
+    <title>Removedor de Fundo IA - MagicEraser V9 (ESM Fix)</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts -->
@@ -81,24 +81,49 @@
 <body class="min-h-screen text-slate-800 flex flex-col items-center py-10 px-4">
 
     <!-- Header -->
-    <header class="text-center mb-10 max-w-2xl">
+    <header class="text-center mb-6 max-w-2xl">
         <div class="inline-flex items-center justify-center p-3 bg-blue-600 rounded-2xl shadow-lg mb-4">
             <i data-lucide="wand-2" class="text-white w-8 h-8"></i>
         </div>
         <h1 class="text-4xl md:text-5xl font-bold text-slate-900 mb-3 tracking-tight">
-            Magic<span class="text-blue-600">Eraser</span> v4
+            Magic<span class="text-blue-600">Eraser</span> v9
         </h1>
         <p class="text-lg text-slate-600">
-            Remoção de fundo com carregamento robusto de IA.
+            Otimizado para ESM (Redes Restritas).
         </p>
     </header>
 
-    <!-- Error Message Container (Hidden by default) -->
+    <!-- Network Diagnostic Panel -->
+    <div id="network-status" class="w-full max-w-lg mb-6 bg-white rounded-xl shadow-sm border border-slate-200 p-4 text-sm">
+        <h4 class="font-semibold text-slate-700 mb-2 flex items-center gap-2">
+            <i data-lucide="activity" class="w-4 h-4"></i> Diagnóstico de Ligação
+        </h4>
+        <div class="space-y-2">
+            <div id="status-esm" class="flex justify-between items-center text-slate-500">
+                <span>Servidor 1 (ESM)</span>
+                <span class="status-badge px-2 py-0.5 rounded text-xs bg-slate-100">A testar...</span>
+            </div>
+            <div id="status-jsdelivr" class="flex justify-between items-center text-slate-500">
+                <span>Servidor 2 (jsDelivr)</span>
+                <span class="status-badge px-2 py-0.5 rounded text-xs bg-slate-100">A testar...</span>
+            </div>
+            <div id="status-unpkg" class="flex justify-between items-center text-slate-500">
+                <span>Servidor 3 (Unpkg)</span>
+                <span class="status-badge px-2 py-0.5 rounded text-xs bg-slate-100">A testar...</span>
+            </div>
+        </div>
+        <div id="final-status" class="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400">
+            A aguardar verificação...
+        </div>
+    </div>
+
+    <!-- Error Message Container -->
     <div id="error-container" class="hidden w-full max-w-3xl mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-        <i data-lucide="alert-triangle" class="text-red-500 w-6 h-6 flex-shrink-0 mt-0.5"></i>
+        <i data-lucide="alert-octagon" class="text-red-500 w-6 h-6 flex-shrink-0 mt-0.5"></i>
         <div>
-            <h3 class="font-bold text-red-700">Ocorreu um erro</h3>
+            <h3 class="font-bold text-red-700">Erro de Carregamento</h3>
             <p id="error-text" class="text-sm text-red-600 mt-1">Detalhes do erro aqui.</p>
+            <div class="mt-3 bg-white/50 p-2 rounded text-xs text-red-800 font-mono border border-red-100 overflow-auto max-h-32" id="technical-error"></div>
             <button onclick="document.getElementById('error-container').classList.add('hidden')" class="text-xs text-red-500 underline mt-2">Fechar</button>
         </div>
     </div>
@@ -110,23 +135,23 @@
         <div id="input-section" class="p-8 md:p-12 text-center transition-all duration-500">
             <div 
                 id="drop-zone"
-                class="drop-zone border-4 border-dashed border-slate-200 rounded-3xl p-10 cursor-pointer hover:border-blue-400 group relative"
+                class="drop-zone border-4 border-dashed border-slate-200 rounded-3xl p-10 cursor-pointer hover:border-blue-400 group relative opacity-50 pointer-events-none"
             >
-                <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/png, image/jpeg, image/jpg, image/webp">
+                <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/png, image/jpeg, image/jpg, image/webp" disabled>
                 
                 <div class="pointer-events-none">
                     <div class="bg-blue-50 text-blue-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
                         <i data-lucide="image-plus" class="w-10 h-10"></i>
                     </div>
-                    <h3 class="text-xl font-bold text-slate-700 mb-2">Solte a sua imagem aqui</h3>
-                    <p class="text-slate-500">ou clique para selecionar</p>
+                    <h3 id="drop-text" class="text-xl font-bold text-slate-700 mb-2">A carregar sistema...</h3>
+                    <p class="text-slate-500">Aguarde a verificação de rede</p>
                     <p class="text-xs text-slate-400 mt-4">JPG, PNG, WEBP</p>
                 </div>
             </div>
 
             <!-- Samples -->
-            <div class="mt-8">
-                <p class="text-sm text-slate-400 mb-3 uppercase tracking-wider font-semibold">Teste com uma imagem</p>
+            <div class="mt-8 opacity-50 pointer-events-none" id="samples-container">
+                <p class="text-sm text-slate-400 mb-3 uppercase tracking-wider font-semibold">Exemplos</p>
                 <div class="flex flex-wrap justify-center gap-4">
                     <button onclick="loadSample('https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80')" class="w-16 h-16 rounded-lg overflow-hidden border-2 border-transparent hover:border-blue-500 transition-all shadow-sm">
                         <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80" class="w-full h-full object-cover" crossorigin="anonymous">
@@ -183,192 +208,245 @@
 
     </main>
 
-    <script>
+    <script type="module">
         // Inicializar Lucide
         if (window.lucide) {
             window.lucide.createIcons();
         }
 
-        // --- Configuração e Variáveis ---
-        const LIB_VERSION = '1.3.0'; // Atualizado para versão mais recente
-        const LIB_URL = `https://cdn.jsdelivr.net/npm/@imgly/background-removal@${LIB_VERSION}/dist/imgly-background-removal.min.js`;
-        const ASSETS_PATH = `https://cdn.jsdelivr.net/npm/@imgly/background-removal@${LIB_VERSION}/dist/`;
+        // --- LISTA DE CDNs PARA TESTE ---
+        const PROVIDERS = [
+            {
+                id: 'status-esm',
+                name: 'ESM.sh',
+                // URL de teste simples (ficheiro pequeno)
+                url: 'https://esm.sh/@imgly/background-removal@1.3.0',
+                assetsUrl: 'https://esm.sh/@imgly/background-removal@1.3.0/dist/',
+                isModule: true
+            },
+            {
+                id: 'status-jsdelivr',
+                name: 'jsDelivr',
+                url: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/dist/imgly-background-removal.min.js',
+                assetsUrl: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/dist/',
+                isModule: false
+            },
+            {
+                id: 'status-unpkg',
+                name: 'Unpkg',
+                url: 'https://unpkg.com/@imgly/background-removal@1.3.0/dist/imgly-background-removal.min.js',
+                assetsUrl: 'https://unpkg.com/@imgly/background-removal@1.3.0/dist/',
+                isModule: false
+            }
+        ];
 
-        // Elementos DOM
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-input');
-        const inputSection = document.getElementById('input-section');
-        const resultSection = document.getElementById('result-section');
-        const processingState = document.getElementById('processing-state');
-        const originalPreview = document.getElementById('original-preview');
-        const processedPreview = document.getElementById('processed-preview');
-        const downloadBtn = document.getElementById('download-btn');
-        const resetBtn = document.getElementById('reset-btn');
-        const progressText = document.getElementById('progress-text');
-        const errorContainer = document.getElementById('error-container');
-        const errorText = document.getElementById('error-text');
+        let bestProvider = null;
+        let imglyLib = null;
 
-        let currentResultBlob = null;
-        let isLibLoaded = false;
+        // --- SISTEMA DE DIAGNÓSTICO INICIAL ---
+        
+        async function runNetworkDiagnostics() {
+            const finalStatusEl = document.getElementById('final-status');
+            let successCount = 0;
 
-        // --- Utils de Carregamento de Scripts ---
-        function loadLibrary() {
-            return new Promise((resolve, reject) => {
-                if (window.imglyBackgroundRemoval) {
-                    return resolve(window.imglyBackgroundRemoval);
-                }
-                
-                // Verifica se já estamos a carregar
-                if (document.querySelector(`script[src="${LIB_URL}"]`)) {
-                    // Script já inserido, mas talvez ainda não carregado. 
-                    // Uma implementação simples: esperar um pouco ou confiar no usuário tentar de novo.
-                    // Para robustez, injetamos novamente se falhou antes, ou usamos polling.
-                    // Aqui vamos simplificar: se não existe window object, assumimos falha ou loading.
-                }
+            for (const p of PROVIDERS) {
+                const el = document.getElementById(p.id).querySelector('.status-badge');
+                el.innerText = 'A testar...';
+                el.className = 'status-badge px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700';
 
-                const script = document.createElement('script');
-                script.src = LIB_URL;
-                script.crossOrigin = "anonymous";
-                
-                script.onload = () => {
-                    if (window.imglyBackgroundRemoval) {
-                        isLibLoaded = true;
-                        resolve(window.imglyBackgroundRemoval);
+                try {
+                    // Teste simples de HEAD/GET para ver se o domínio responde
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000); 
+                    
+                    const response = await fetch(p.url, { 
+                        method: 'HEAD', 
+                        signal: controller.signal,
+                        mode: 'cors' 
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (response.ok || response.status === 200) {
+                        el.innerText = 'Disponível';
+                        el.className = 'status-badge px-2 py-0.5 rounded text-xs bg-green-100 text-green-700 font-bold';
+                        if (!bestProvider) bestProvider = p; // Escolhe o primeiro que funcionar
+                        successCount++;
                     } else {
-                        reject(new Error("Script carregado mas objeto global não encontrado."));
+                        throw new Error(`Status ${response.status}`);
                     }
-                };
-                
-                script.onerror = (e) => {
-                    reject(new Error("Falha de rede ao carregar o script da IA. Verifique a sua ligação ou bloqueadores de anúncios."));
-                };
+                } catch (e) {
+                    console.warn(`${p.name} falhou:`, e);
+                    el.innerText = 'Bloqueado';
+                    el.className = 'status-badge px-2 py-0.5 rounded text-xs bg-red-100 text-red-700';
+                }
+            }
 
-                document.head.appendChild(script);
-            });
+            if (bestProvider) {
+                finalStatusEl.innerHTML = `<span class="text-green-600 font-bold">✓ Rede pronta.</span> Servidor Ativo: ${bestProvider.name}`;
+                enableUI();
+            } else {
+                finalStatusEl.innerHTML = `<span class="text-red-600 font-bold">⚠ Falha total.</span> Nenhum servidor acessível. Verifique AdBlock/Firewall.`;
+                showError("Não foi possível ligar a nenhum servidor de IA. Por favor, desative o AdBlock ou verifique a sua ligação.");
+            }
         }
 
-        // --- Funções Principais ---
+        function enableUI() {
+            const dz = document.getElementById('drop-zone');
+            const fi = document.getElementById('file-input');
+            const txt = document.getElementById('drop-text');
+            const samples = document.getElementById('samples-container');
 
-        async function processImage(fileBlob) {
-            // UI Update
+            dz.classList.remove('opacity-50', 'pointer-events-none');
+            samples.classList.remove('opacity-50', 'pointer-events-none');
+            fi.disabled = false;
+            txt.innerText = 'Solte a sua imagem aqui';
+        }
+
+        // --- CARREGAMENTO REAL ---
+
+        async function loadLibrary() {
+            if (imglyLib) return imglyLib;
+            if (!bestProvider) throw new Error("Nenhum fornecedor de rede disponível.");
+
+            try {
+                if (bestProvider.name === 'ESM.sh') {
+                    // Importação moderna via módulo 
+                    // Nota: o +esm pode ser necessário para forçar header de módulo em certos browsers
+                    const module = await import(bestProvider.url + '/+esm'); 
+                    imglyLib = module.default || module;
+                    return imglyLib;
+                } else {
+                    // Método clássico Script Injection
+                    return new Promise((resolve, reject) => {
+                        if (window.imglyBackgroundRemoval) {
+                            imglyLib = window.imglyBackgroundRemoval;
+                            resolve(imglyLib);
+                            return;
+                        }
+
+                        const script = document.createElement('script');
+                        script.src = bestProvider.url;
+                        script.crossOrigin = "anonymous";
+                        script.onload = () => {
+                            if (window.imglyBackgroundRemoval) {
+                                imglyLib = window.imglyBackgroundRemoval;
+                                resolve(imglyLib);
+                            } else {
+                                reject(new Error("Script carregou mas objeto global falhou"));
+                            }
+                        };
+                        script.onerror = () => reject(new Error(`Falha ao carregar script de ${bestProvider.name}`));
+                        document.head.appendChild(script);
+                    });
+                }
+            } catch (e) {
+                throw e;
+            }
+        }
+
+        // --- LÓGICA DA APP ---
+
+        window.processImage = async function(fileBlob) {
+            const errorContainer = document.getElementById('error-container');
+            const technicalError = document.getElementById('technical-error');
+            const originalPreview = document.getElementById('original-preview');
+            const processedPreview = document.getElementById('processed-preview');
+            const progressText = document.getElementById('progress-text');
+            const fileInput = document.getElementById('file-input');
+            const inputSection = document.getElementById('input-section');
+            const resultSection = document.getElementById('result-section');
+            
             errorContainer.classList.add('hidden');
             const originalUrl = URL.createObjectURL(fileBlob);
             originalPreview.src = originalUrl;
+            
             showLoading(true);
-            progressText.innerText = "A carregar a biblioteca de IA...";
+            progressText.innerText = "A carregar motor de IA...";
 
             try {
-                // 1. Garantir que a lib existe
-                await loadLibrary();
+                const lib = await loadLibrary();
 
-                // 2. Configurar
-                const config = {
-                    publicPath: ASSETS_PATH,
+                // Configuração da biblioteca
+                let config = {
                     debug: true,
+                    // CORREÇÃO CRÍTICA V9: 
+                    // Se estivermos a usar ESM, definimos explicitamente o publicPath
+                    // para garantir que os assets vêm do mesmo sítio que funciona (ESM.sh)
+                    publicPath: bestProvider.assetsUrl,
                     progress: (key, current, total) => {
-                        const percent = total ? Math.round((current / total) * 100) : 0;
-                        if(key.includes('fetch')) {
-                            progressText.innerText = `A transferir modelo IA: ${percent}%`;
-                        } else if (key.includes('compute')) {
-                            progressText.innerText = `A processar pixels: ${percent}%`;
-                        }
+                         const percent = total ? Math.round((current / total) * 100) : 0;
+                         if(key.includes('fetch')) progressText.innerText = `A descarregar dados: ${percent}%`;
+                         else if(key.includes('compute')) progressText.innerText = `A remover fundo: ${percent}%`;
                     }
                 };
 
-                // 3. Executar
-                progressText.innerText = "A iniciar processamento...";
-                const imageBitmap = await imglyBackgroundRemoval.removeBackground(fileBlob, config);
-                
-                // 4. Resultado
+                const imageBitmap = await lib.removeBackground(fileBlob, config);
                 const url = URL.createObjectURL(imageBitmap);
                 processedPreview.src = url;
-                currentResultBlob = imageBitmap;
-                showResults();
+                window.currentResultBlob = imageBitmap; 
+                
+                inputSection.classList.add('hidden');
+                resultSection.classList.remove('hidden');
 
             } catch (error) {
-                console.error("Erro no processamento:", error);
-                let userMsg = "Erro desconhecido.";
+                console.error("Erro fatal:", error);
                 
-                if (error.message.includes("Falha de rede") || error.message.includes("network")) {
-                    userMsg = "Não foi possível ligar ao servidor de IA. Verifique a sua internet.";
-                } else if (error.message.includes("fetch")) {
-                    userMsg = "Erro ao descarregar os modelos da IA (erro de CORS ou rede).";
-                } else {
-                    userMsg = error.message;
+                let userMsg = "Erro de processamento.";
+                if (error.message.includes("fetch") || error.message.includes("network")) {
+                     userMsg = `Erro de rede ao baixar os modelos IA. O servidor ${bestProvider?.name || 'padrão'} pode ter bloqueado o download dos ficheiros .wasm.`;
                 }
                 
-                showError(userMsg);
-                resetApp(false);
+                technicalError.innerText = error.toString() + "\nProvider: " + (bestProvider?.name || 'None');
+                errorContainer.classList.remove('hidden');
+                document.getElementById('error-text').innerText = userMsg;
+                
+                inputSection.classList.remove('hidden');
+                resultSection.classList.add('hidden');
             } finally {
                 showLoading(false);
                 fileInput.value = '';
             }
+        };
+
+        // --- UTILS ---
+        
+        function showLoading(show) {
+            const el = document.getElementById('processing-state');
+            if (show) el.classList.remove('hidden');
+            else el.classList.add('hidden');
         }
 
-        // --- Event Listeners e Helpers ---
+        function showError(msg) {
+            const el = document.getElementById('error-container');
+            el.classList.remove('hidden');
+            document.getElementById('error-text').innerText = msg;
+        }
 
-        window.loadSample = async function(url) {
+        // --- EVENTOS GLOBAIS ---
+        window.loadSample = async (url) => {
             try {
                 showLoading(true);
-                progressText.innerText = "A obter imagem de exemplo...";
                 const response = await fetch(url, { mode: 'cors' });
-                if (!response.ok) throw new Error("Erro HTTP: " + response.status);
+                if (!response.ok) throw new Error("Erro download imagem");
                 const blob = await response.blob();
-                processImage(blob);
-            } catch (error) {
-                console.error(error);
-                showError("Erro ao carregar exemplo: " + error.message);
+                await window.processImage(blob);
+            } catch (e) {
+                showError("Erro exemplo: " + e.message);
                 showLoading(false);
             }
         };
 
-        // Drag & Drop
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
-        });
-        ['dragenter', 'dragover'].forEach(() => dropZone.classList.add('drag-over'));
-        ['dragleave', 'drop'].forEach(() => dropZone.classList.remove('drag-over'));
-        
-        dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
-        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        window.resetApp = () => {
+            document.getElementById('input-section').classList.remove('hidden');
+            document.getElementById('result-section').classList.add('hidden');
+            document.getElementById('original-preview').src = '';
+            document.getElementById('processed-preview').src = '';
+            window.currentResultBlob = null;
+        };
 
-        function handleFiles(files) {
-            if (files.length > 0) {
-                if (files[0].type.match('image.*')) {
-                    processImage(files[0]);
-                } else {
-                    showError("Apenas ficheiros de imagem são permitidos.");
-                }
-            }
-        }
-
-        function showError(msg) {
-            errorContainer.classList.remove('hidden');
-            errorText.innerText = msg;
-        }
-
-        function showLoading(show) {
-            if (show) processingState.classList.remove('hidden');
-            else processingState.classList.add('hidden');
-        }
-
-        function showResults() {
-            inputSection.classList.add('hidden');
-            resultSection.classList.remove('hidden');
-        }
-
-        function resetApp(clearError = true) {
-            inputSection.classList.remove('hidden');
-            resultSection.classList.add('hidden');
-            originalPreview.src = '';
-            processedPreview.src = '';
-            currentResultBlob = null;
-            if(clearError) errorContainer.classList.add('hidden');
-        }
-
-        downloadBtn.addEventListener('click', () => {
-            if (currentResultBlob) {
-                const url = URL.createObjectURL(currentResultBlob);
+        window.downloadResult = () => {
+            if (window.currentResultBlob) {
+                const url = URL.createObjectURL(window.currentResultBlob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = 'sem-fundo.png';
@@ -377,9 +455,29 @@
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
             }
+        };
+
+        // DOM Events
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); });
+        dropZone.addEventListener('drop', (e) => { 
+            e.preventDefault(); 
+            dropZone.classList.remove('drag-over');
+            if(e.dataTransfer.files[0]) window.processImage(e.dataTransfer.files[0]);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if(e.target.files[0]) window.processImage(e.target.files[0]);
         });
 
-        resetBtn.addEventListener('click', () => resetApp(true));
+        document.getElementById('download-btn').addEventListener('click', window.downloadResult);
+        document.getElementById('reset-btn').addEventListener('click', window.resetApp);
+
+        // INICIAR DIAGNÓSTICO
+        runNetworkDiagnostics();
 
     </script>
 </body>
