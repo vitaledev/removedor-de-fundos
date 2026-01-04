@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Removedor de Fundo IA - MagicEraser V4</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        .checkerboard {
+            background-color: #ffffff;
+            background-image: 
+                linear-gradient(45deg, #e5e7eb 25%, transparent 25%), 
+                linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #e5e7eb 75%), 
+                linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        .drop-zone {
+            transition: all 0.3s ease;
+        }
+        .drop-zone.drag-over {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            transform: scale(1.02);
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .btn-shine {
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-shine::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(to bottom right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 40%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.1) 60%, rgba(255,255,255,0) 100%);
+            transform: rotate(45deg);
+            transition: all 0.3s;
+            opacity: 0;
+        }
+        .btn-shine:hover::after {
+            animation: shine 1.5s infinite;
+            opacity: 1;
+        }
+        @keyframes shine {
+            0% { transform: translateX(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) rotate(45deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col items-center py-10 px-4">
+
+    <!-- Header -->
+    <header class="text-center mb-10 max-w-2xl">
+        <div class="inline-flex items-center justify-center p-3 bg-blue-600 rounded-2xl shadow-lg mb-4">
+            <i data-lucide="wand-2" class="text-white w-8 h-8"></i>
+        </div>
+        <h1 class="text-4xl md:text-5xl font-bold text-slate-900 mb-3 tracking-tight">
+            Magic<span class="text-blue-600">Eraser</span> v4
+        </h1>
+        <p class="text-lg text-slate-600">
+            Remoção de fundo com carregamento robusto de IA.
+        </p>
+    </header>
+
+    <!-- Error Message Container (Hidden by default) -->
+    <div id="error-container" class="hidden w-full max-w-3xl mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+        <i data-lucide="alert-triangle" class="text-red-500 w-6 h-6 flex-shrink-0 mt-0.5"></i>
+        <div>
+            <h3 class="font-bold text-red-700">Ocorreu um erro</h3>
+            <p id="error-text" class="text-sm text-red-600 mt-1">Detalhes do erro aqui.</p>
+            <button onclick="document.getElementById('error-container').classList.add('hidden')" class="text-xs text-red-500 underline mt-2">Fechar</button>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <main class="w-full max-w-5xl bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden relative">
+        
+        <!-- Input Section -->
+        <div id="input-section" class="p-8 md:p-12 text-center transition-all duration-500">
+            <div 
+                id="drop-zone"
+                class="drop-zone border-4 border-dashed border-slate-200 rounded-3xl p-10 cursor-pointer hover:border-blue-400 group relative"
+            >
+                <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/png, image/jpeg, image/jpg, image/webp">
+                
+                <div class="pointer-events-none">
+                    <div class="bg-blue-50 text-blue-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                        <i data-lucide="image-plus" class="w-10 h-10"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-700 mb-2">Solte a sua imagem aqui</h3>
+                    <p class="text-slate-500">ou clique para selecionar</p>
+                    <p class="text-xs text-slate-400 mt-4">JPG, PNG, WEBP</p>
+                </div>
+            </div>
+
+            <!-- Samples -->
+            <div class="mt-8">
+                <p class="text-sm text-slate-400 mb-3 uppercase tracking-wider font-semibold">Teste com uma imagem</p>
+                <div class="flex flex-wrap justify-center gap-4">
+                    <button onclick="loadSample('https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80')" class="w-16 h-16 rounded-lg overflow-hidden border-2 border-transparent hover:border-blue-500 transition-all shadow-sm">
+                        <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80" class="w-full h-full object-cover" crossorigin="anonymous">
+                    </button>
+                    <button onclick="loadSample('https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&q=80')" class="w-16 h-16 rounded-lg overflow-hidden border-2 border-transparent hover:border-blue-500 transition-all shadow-sm">
+                        <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&q=80" class="w-full h-full object-cover" crossorigin="anonymous">
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing State -->
+        <div id="processing-state" class="hidden absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center p-8 text-center backdrop-blur-sm">
+            <div class="loader mb-6"></div>
+            <h3 class="text-2xl font-bold text-slate-800 mb-2">A processar...</h3>
+            <p id="progress-text" class="text-slate-600 max-w-md font-mono text-sm">A iniciar...</p>
+        </div>
+
+        <!-- Result Section -->
+        <div id="result-section" class="hidden">
+            <div class="grid md:grid-cols-2 gap-0 min-h-[500px]">
+                
+                <!-- Original -->
+                <div class="p-6 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="font-semibold text-slate-600 flex items-center"><i data-lucide="image" class="w-4 h-4 mr-2"></i>Original</span>
+                    </div>
+                    <div class="flex-1 flex items-center justify-center bg-slate-200 rounded-xl overflow-hidden shadow-inner p-4 relative">
+                        <img id="original-preview" class="max-w-full max-h-[400px] object-contain rounded shadow-lg" src="" alt="Original">
+                    </div>
+                </div>
+
+                <!-- Processed -->
+                <div class="p-6 bg-white flex flex-col">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="font-semibold text-blue-600 flex items-center"><i data-lucide="sparkles" class="w-4 h-4 mr-2"></i>Sem Fundo</span>
+                    </div>
+                    <div class="flex-1 flex items-center justify-center checkerboard rounded-xl overflow-hidden shadow-inner p-4 relative border border-slate-200">
+                        <img id="processed-preview" class="max-w-full max-h-[400px] object-contain rounded shadow-lg" src="" alt="Sem Fundo">
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="mt-6 flex flex-col sm:flex-row gap-3">
+                        <button id="download-btn" class="btn-shine flex-1 bg-slate-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-2">
+                            <i data-lucide="download"></i> Salvar PNG
+                        </button>
+                        <button id="reset-btn" class="flex-none bg-slate-100 text-slate-700 font-semibold py-3 px-4 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200" title="Nova Imagem">
+                            <i data-lucide="rotate-ccw"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Inicializar Lucide
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+
+        // --- Configuração e Variáveis ---
+        const LIB_VERSION = '1.3.0'; // Atualizado para versão mais recente
+        const LIB_URL = `https://cdn.jsdelivr.net/npm/@imgly/background-removal@${LIB_VERSION}/dist/imgly-background-removal.min.js`;
+        const ASSETS_PATH = `https://cdn.jsdelivr.net/npm/@imgly/background-removal@${LIB_VERSION}/dist/`;
+
+        // Elementos DOM
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const inputSection = document.getElementById('input-section');
+        const resultSection = document.getElementById('result-section');
+        const processingState = document.getElementById('processing-state');
+        const originalPreview = document.getElementById('original-preview');
+        const processedPreview = document.getElementById('processed-preview');
+        const downloadBtn = document.getElementById('download-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const progressText = document.getElementById('progress-text');
+        const errorContainer = document.getElementById('error-container');
+        const errorText = document.getElementById('error-text');
+
+        let currentResultBlob = null;
+        let isLibLoaded = false;
+
+        // --- Utils de Carregamento de Scripts ---
+        function loadLibrary() {
+            return new Promise((resolve, reject) => {
+                if (window.imglyBackgroundRemoval) {
+                    return resolve(window.imglyBackgroundRemoval);
+                }
+                
+                // Verifica se já estamos a carregar
+                if (document.querySelector(`script[src="${LIB_URL}"]`)) {
+                    // Script já inserido, mas talvez ainda não carregado. 
+                    // Uma implementação simples: esperar um pouco ou confiar no usuário tentar de novo.
+                    // Para robustez, injetamos novamente se falhou antes, ou usamos polling.
+                    // Aqui vamos simplificar: se não existe window object, assumimos falha ou loading.
+                }
+
+                const script = document.createElement('script');
+                script.src = LIB_URL;
+                script.crossOrigin = "anonymous";
+                
+                script.onload = () => {
+                    if (window.imglyBackgroundRemoval) {
+                        isLibLoaded = true;
+                        resolve(window.imglyBackgroundRemoval);
+                    } else {
+                        reject(new Error("Script carregado mas objeto global não encontrado."));
+                    }
+                };
+                
+                script.onerror = (e) => {
+                    reject(new Error("Falha de rede ao carregar o script da IA. Verifique a sua ligação ou bloqueadores de anúncios."));
+                };
+
+                document.head.appendChild(script);
+            });
+        }
+
+        // --- Funções Principais ---
+
+        async function processImage(fileBlob) {
+            // UI Update
+            errorContainer.classList.add('hidden');
+            const originalUrl = URL.createObjectURL(fileBlob);
+            originalPreview.src = originalUrl;
+            showLoading(true);
+            progressText.innerText = "A carregar a biblioteca de IA...";
+
+            try {
+                // 1. Garantir que a lib existe
+                await loadLibrary();
+
+                // 2. Configurar
+                const config = {
+                    publicPath: ASSETS_PATH,
+                    debug: true,
+                    progress: (key, current, total) => {
+                        const percent = total ? Math.round((current / total) * 100) : 0;
+                        if(key.includes('fetch')) {
+                            progressText.innerText = `A transferir modelo IA: ${percent}%`;
+                        } else if (key.includes('compute')) {
+                            progressText.innerText = `A processar pixels: ${percent}%`;
+                        }
+                    }
+                };
+
+                // 3. Executar
+                progressText.innerText = "A iniciar processamento...";
+                const imageBitmap = await imglyBackgroundRemoval.removeBackground(fileBlob, config);
+                
+                // 4. Resultado
+                const url = URL.createObjectURL(imageBitmap);
+                processedPreview.src = url;
+                currentResultBlob = imageBitmap;
+                showResults();
+
+            } catch (error) {
+                console.error("Erro no processamento:", error);
+                let userMsg = "Erro desconhecido.";
+                
+                if (error.message.includes("Falha de rede") || error.message.includes("network")) {
+                    userMsg = "Não foi possível ligar ao servidor de IA. Verifique a sua internet.";
+                } else if (error.message.includes("fetch")) {
+                    userMsg = "Erro ao descarregar os modelos da IA (erro de CORS ou rede).";
+                } else {
+                    userMsg = error.message;
+                }
+                
+                showError(userMsg);
+                resetApp(false);
+            } finally {
+                showLoading(false);
+                fileInput.value = '';
+            }
+        }
+
+        // --- Event Listeners e Helpers ---
+
+        window.loadSample = async function(url) {
+            try {
+                showLoading(true);
+                progressText.innerText = "A obter imagem de exemplo...";
+                const response = await fetch(url, { mode: 'cors' });
+                if (!response.ok) throw new Error("Erro HTTP: " + response.status);
+                const blob = await response.blob();
+                processImage(blob);
+            } catch (error) {
+                console.error(error);
+                showError("Erro ao carregar exemplo: " + error.message);
+                showLoading(false);
+            }
+        };
+
+        // Drag & Drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+        });
+        ['dragenter', 'dragover'].forEach(() => dropZone.classList.add('drag-over'));
+        ['dragleave', 'drop'].forEach(() => dropZone.classList.remove('drag-over'));
+        
+        dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        function handleFiles(files) {
+            if (files.length > 0) {
+                if (files[0].type.match('image.*')) {
+                    processImage(files[0]);
+                } else {
+                    showError("Apenas ficheiros de imagem são permitidos.");
+                }
+            }
+        }
+
+        function showError(msg) {
+            errorContainer.classList.remove('hidden');
+            errorText.innerText = msg;
+        }
+
+        function showLoading(show) {
+            if (show) processingState.classList.remove('hidden');
+            else processingState.classList.add('hidden');
+        }
+
+        function showResults() {
+            inputSection.classList.add('hidden');
+            resultSection.classList.remove('hidden');
+        }
+
+        function resetApp(clearError = true) {
+            inputSection.classList.remove('hidden');
+            resultSection.classList.add('hidden');
+            originalPreview.src = '';
+            processedPreview.src = '';
+            currentResultBlob = null;
+            if(clearError) errorContainer.classList.add('hidden');
+        }
+
+        downloadBtn.addEventListener('click', () => {
+            if (currentResultBlob) {
+                const url = URL.createObjectURL(currentResultBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'sem-fundo.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+        });
+
+        resetBtn.addEventListener('click', () => resetApp(true));
+
+    </script>
+</body>
+</html>
